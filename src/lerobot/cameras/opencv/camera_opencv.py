@@ -486,41 +486,76 @@ class OpenCVCamera(Camera):
 
     def _read_loop(self) -> None:
         """
-        Internal loop run by the background thread for asynchronous reading.
+        Background camera read loop.
 
-        On each iteration:
-        1. Reads a color frame (blocking call)
-        2. Stores result in latest_frame and updates timestamp (thread-safe)
-        3. Sets new_frame_event to notify listeners
-
-        Stops on DeviceNotConnectedError, logs other errors and continues.
+        Never exits because of temporary camera failures.
+        Instead it keeps retrying until disconnect() is called.
         """
+
         stop_event = self.stop_event
         if stop_event is None:
-            raise RuntimeError(f"{self}: stop_event is not initialized before starting read loop.")
+            raise RuntimeError(f"{self}: stop_event is not initialized.")
+
+        import time
 
         failure_count = 0
+
         while not stop_event.is_set():
+
             try:
                 raw_frame = self._read_from_hardware()
+
                 processed_frame = self._postprocess_image(raw_frame)
+
                 capture_time = time.perf_counter()
 
                 with self.frame_lock:
                     self.latest_frame = processed_frame
                     self.latest_timestamp = capture_time
+
                 self.new_frame_event.set()
+
                 failure_count = 0
 
             except DeviceNotConnectedError:
                 break
-            except Exception as e:
-                if failure_count <= 10:
-                    failure_count += 1
-                    logger.warning(f"Error reading frame in background thread for {self}: {e}")
-                else:
-                    raise RuntimeError(f"{self} exceeded maximum consecutive read failures.") from e
 
+            except Exception as e:
+
+                failure_count += 1
+
+                logger.warning(
+                    f"{self}: camera read failed ({failure_count}): {e}"
+                )
+
+                #
+                # If OpenCV lost the camera,
+                # release and reopen it.
+                #
+
+                try:
+
+                    if self.videocapture is not None:
+                        self.videocapture.release()
+
+                    time.sleep(0.25)
+
+                    self.videocapture = cv2.VideoCapture(
+                        self.index_or_path,
+                        self.backend,
+                    )
+
+                except Exception as reconnect_error:
+
+                    logger.warning(
+                        f"{self}: reconnect failed: {reconnect_error}"
+                    )
+
+                #
+                # Don't burn CPU.
+                #
+
+                time.sleep(0.05)
     def _start_read_thread(self) -> None:
         """Starts or restarts the background read thread if it's not running."""
         self._stop_read_thread()

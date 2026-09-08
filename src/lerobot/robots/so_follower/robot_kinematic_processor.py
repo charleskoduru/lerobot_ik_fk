@@ -164,6 +164,17 @@ class EEReferenceAndDelta(RobotActionProcessorStep):
         self.reference_ee_pose = None
         self._command_when_disabled = None
 
+    def relatch(self):
+        """
+        Forget the current controller reference.
+
+        The next time Grip is pressed, the current robot pose will become
+        the new reference pose.
+        """
+        self.reference_ee_pose = None
+        self._prev_enabled = False
+        self._command_when_disabled = None
+        
     def transform_features(
         self, features: dict[PipelineFeatureType, dict[str, PolicyFeature]]
     ) -> dict[PipelineFeatureType, dict[str, PolicyFeature]]:

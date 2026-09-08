@@ -289,19 +289,39 @@ class OpenCVCamera(Camera):
         if self.capture_width is None or self.capture_height is None:
             raise ValueError(f"{self} capture_width or capture_height is not set")
 
-        width_success = self.videocapture.set(cv2.CAP_PROP_FRAME_WIDTH, float(self.capture_width))
-        height_success = self.videocapture.set(cv2.CAP_PROP_FRAME_HEIGHT, float(self.capture_height))
+        # Some Linux/UVC cameras return False even though the setting succeeds.
+        self.videocapture.set(
+            cv2.CAP_PROP_FRAME_WIDTH,
+            float(self.capture_width),
+        )
 
-        actual_width = int(round(self.videocapture.get(cv2.CAP_PROP_FRAME_WIDTH)))
-        if not width_success or self.capture_width != actual_width:
+        self.videocapture.set(
+            cv2.CAP_PROP_FRAME_HEIGHT,
+            float(self.capture_height),
+        )
+
+        actual_width = int(
+            round(
+                self.videocapture.get(cv2.CAP_PROP_FRAME_WIDTH)
+            )
+        )
+
+        actual_height = int(
+            round(
+                self.videocapture.get(cv2.CAP_PROP_FRAME_HEIGHT)
+            )
+        )
+
+        if actual_width != self.capture_width:
             raise RuntimeError(
-                f"{self} failed to set capture_width={self.capture_width} ({actual_width=}, {width_success=})."
+                f"{self} failed to set capture_width={self.capture_width} "
+                f"(actual_width={actual_width})."
             )
 
-        actual_height = int(round(self.videocapture.get(cv2.CAP_PROP_FRAME_HEIGHT)))
-        if not height_success or self.capture_height != actual_height:
+        if actual_height != self.capture_height:
             raise RuntimeError(
-                f"{self} failed to set capture_height={self.capture_height} ({actual_height=}, {height_success=})."
+                f"{self} failed to set capture_height={self.capture_height} "
+                f"(actual_height={actual_height})."
             )
 
     @staticmethod

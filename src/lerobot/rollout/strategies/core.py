@@ -372,57 +372,7 @@ def send_next_action(
     if len(interp) != len(ordered_keys):
         raise ValueError(f"Interpolated tensor length ({len(interp)}) != action keys ({len(ordered_keys)})")
     action_dict = {k: interp[i].item() for i, k in enumerate(ordered_keys)}
-
     with section("send"):
         processed = ctx.processors.robot_action_processor((action_dict, obs_raw))
-
-
-        # ---------------------------------------------------------
-        # SO-101 action smoothing + maximum per-tick movement limit
-        # ---------------------------------------------------------
-
-        # Smaller alpha = smoother/slower response.
-        # Start conservative because the current policy is very jerky.
-        alpha = 0.10
-
-        # Maximum change allowed per control tick, in the robot action's
-        # native units. Start small and increase only after testing.
-        max_step = 0.5
-
-        # Store the previous command on the interpolator so it persists
-        # between control-loop iterations.
-        if not hasattr(interpolator, "_last_safe_action"):
-            # Initialize from the CURRENT robot position where possible.
-            # This prevents initializing from zero and commanding a jump.
-            interpolator._last_safe_action = {
-                key: float(obs_raw.get(key, value))
-                for key, value in processed.items()
-            }
-
-        previous = interpolator._last_safe_action
-        safe_action = {}
-
-        for key, target in processed.items():
-            # Leave non-numeric fields alone, if there are any.
-            if not isinstance(target, (int, float)):
-                safe_action[key] = target
-                continue
-
-            target = float(target)
-            prev = float(previous.get(key, target))
-
-            # 1. Low-pass filter to remove jitter.
-            smoothed = prev + alpha * (target - prev)
-
-            # 2. Limit maximum movement during this control tick.
-            delta = smoothed - prev
-            delta = max(-max_step, min(max_step, delta))
-
-            safe_action[key] = prev + delta
-
-        ctx.hardware.robot_wrapper.send_action(safe_action)
-
-        # Save what we ACTUALLY commanded.
-        interpolator._last_safe_action = safe_action.copy()
-
+        ctx.hardware.robot_wrapper.send_action(processed)
     return action_dict

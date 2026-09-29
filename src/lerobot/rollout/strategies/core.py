@@ -375,9 +375,7 @@ def send_next_action(
 
     with section("send"):
         processed = ctx.processors.robot_action_processor((action_dict, obs_raw))
-        print("RAW OBS:", obs_raw)
-        print("POLICY ACTION:", action_dict)
-        print("PROCESSED ACTION:", processed)
+
 
         # ---------------------------------------------------------
         # SO-101 action smoothing + maximum per-tick movement limit

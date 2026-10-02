@@ -474,16 +474,6 @@ class ACT(nn.Module):
             # NOTE: If modifying this section, verify on MPS devices that
             # gradients remain stable (no explosions or NaNs).
             for img in batch[OBS_IMAGES]:
-                # Normalize one-channel millimeter depth for ResNet.
-                if img.shape[1] == 1:
-                    img = img.clamp(min=0.0, max=1500.0) / 1500.0
-                    img = img.repeat(1, 3, 1, 1)
-                elif img.shape[1] != 3:
-                    raise ValueError(
-                        f"ACT expects 1-channel depth or 3-channel RGB input, "
-                        f"but received shape {tuple(img.shape)}"
-                    )
-
                 cam_features = self.backbone(img)["feature_map"]
                 cam_pos_embed = self.encoder_cam_feat_pos_embed(cam_features).to(dtype=cam_features.dtype)
                 cam_features = self.encoder_img_feat_input_proj(cam_features)

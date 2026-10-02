@@ -135,8 +135,37 @@ def prepare_observation_for_inference(
     for name in observation:
         tensor = torch.from_numpy(observation[name]).to(device)
         if "image" in name:
-            if tensor.dtype == torch.uint8:
-                tensor = tensor.type(torch.float32) / 255
+            if name == "observation.images.gripperCam_depth":
+                # Match convert_depth_for_act.py exactly:
+                # uint16 millimetres -> 70–500 mm -> uint8-style 0–255
+                # -> normalized float32 -> repeated into three channels.
+                if tensor.dtype == torch.uint16:
+                    depth_mm = tensor[..., 0].to(torch.float32)
+                    valid = depth_mm != 0
+
+                    encoded = torch.zeros_like(depth_mm, dtype=torch.float32)
+
+                    depth_m = depth_mm / 1000.0
+                    normalized = torch.clamp(
+                        (depth_m - 0.07) / (0.50 - 0.07),
+                        min=0.0,
+                        max=1.0,
+                    )
+
+                    encoded[valid] = (
+                        1.0 + torch.round(254.0 * normalized[valid])
+                    ) / 255.0
+
+                    tensor = encoded.unsqueeze(-1).repeat(1, 1, 3)
+                else:
+                    tensor = tensor.to(torch.float32)
+
+            elif tensor.dtype == torch.uint8:
+                tensor = tensor.to(torch.float32) / 255.0
+
+            elif not tensor.is_floating_point():
+                tensor = tensor.to(torch.float32)
+
             tensor = tensor.permute(2, 0, 1).contiguous()
         observation[name] = tensor.unsqueeze(0)
 
